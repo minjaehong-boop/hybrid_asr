@@ -65,10 +65,10 @@ transducer-worker   refine buffer
 | 항목 | 값 |
 |------|-----|
 | 샘플레이트 | 16,000 Hz (16kHz 모노) |
-| 프레임 크기 | `frame_sec=0.1`초 (기본값) |
-| 프레임당 샘플 수 | 1,600개 |
+| 프레임 크기 | `frame_sec=0.01`초 (기본값) |
+| 프레임당 샘플 수 | 160개 |
 
-`WavChunkSource`가 wav를 0.1초 프레임으로 잘라 하나씩 transducer-worker에 보낸다.
+`WavChunkSource`가 wav를 0.01초 프레임으로 잘라 하나씩 transducer-worker에 보낸다.
 
 ### 동작 원리: 스트리밍 누적 갱신
 
@@ -151,17 +151,16 @@ else:
 | `trim_sec > 0`, `context_mode="accumulate"` | **CC-Accumulate** | 이전 청크(최대 4개)를 컨텍스트로 붙여 디코딩, left_trim으로 기 커밋 구간 제외 |
 | `trim_sec > 0`, `context_mode="overlap"` | **CC-Overlap** (구 방식) | 고정 2×trim_sec 버퍼만 유지하며 center-commit |
 
-**현재 기본 설정** (`config/default.yaml`): `chunk_sec=30, trim_sec=0.0` → **Simple 모드**
+**현재 기본 설정** (`config/default.yaml`): `chunk_sec=3, trim_sec=0.5, context_mode=accumulate` → **CC-Accumulate 모드**
 
-CLI로 CC 활성화:
+CLI로 모드 전환:
 ```bash
-# accumulate 모드 (CC 기본)
-python main.py --audio test.wav --refine-mode accumulate
-# overlap 모드 (구 방식)
+# overlap 모드
 python main.py --audio test.wav --refine-mode overlap
+# Simple 모드 (CC 비활성)는 YAML에서 trim_sec: 0 으로 설정
 ```
 
-(trim_sec는 YAML에서 설정; Simple → CC 전환에는 `trim_sec > 0` 필요)
+(trim_sec는 YAML에서 설정; `trim_sec: 0`이면 Simple 모드, `trim_sec > 0`이면 CC 활성)
 
 ---
 
@@ -252,21 +251,25 @@ def _feed_center_commit(self, samples):
 기존(구) 방식. 고정 크기(2×trim_sec) 버퍼만 유지. stride = `chunk_dur - left_trim - right_trim`.
 
 ```text
-청크 1: [===========4.0초===========]
-         left_trim=0, right_trim=0.5s → 커밋 3.5초
+청크 0: [===========4.0초===========]
+         left_trim=0, right_trim=0.5s
+         stride = new_dur - right_trim = 3.5초
 
-청크 2:              [===========4.0초===========]
-                      ← overlap 1.0초 →
-         left_trim=0.5, right_trim=0.5s → 커밋 3.0초
+청크 1:              [==overlap(1.0s)=|===4.0초===]
+         full_chunk = 5.0초
+         left_trim=0.5, right_trim=0.5s
+         stride = new_dur = 4.0초
 
-finalize: right_trim=0으로 재계산 → 누락된 끝 0.5초 복원
+finalize: _last_right_trim > 0이면 저장된 결과에서 tail 추출 → 누락 구간 복원
 ```
 
 핵심 변수:
 | 변수 | 역할 |
 |------|------|
-| `self._overlap_buffer` | 이전 청크 끝 2×trim_sec 샘플. 다음 청크 앞에 붙임 |
-| `self._last_raw_result` | 마지막 청크 디코딩 정보. `_finalize_overlap()`에서 tail 복구용 |
+| `self._overlap_buffer` | 이전 full_chunk 끝 2×trim_sec 샘플. 다음 청크 앞에 붙임 |
+| `self._last_result_tokens/timestamps` | 마지막 디코딩 결과. finalize tail 복구용 |
+| `self._last_result_text` | 마지막 디코딩 텍스트. timestamps 없을 때 ratio fallback용 |
+| `self._last_chunk_dur` / `self._last_right_trim` | finalize tail 복구 경계 계산용 |
 
 ---
 
@@ -304,16 +307,20 @@ suffix-prefix 매칭: "기술은" (3글자 일치)
 #### `finalize()`: 마지막 청크의 오른쪽 가장자리 복원
 
 정상 처리 중에는 right_trim만큼 잘리므로, 마지막 청크의 오른쪽 끝이 누락된다.
-`finalize()`는 모드에 따라 두 가지 방식으로 복원한다:
-
-- **`_finalize_accumulate()`**: 재디코딩 없이 저장해둔 `_last_result_tokens/timestamps`에서 tail 추출
-- **`_finalize_overlap()`**: 저장해둔 `_last_raw_result`를 right_trim=0으로 재추출
+`finalize()`는 두 CC 모드 공통으로 하나의 메서드에서 처리한다:
 
 ```python
-def finalize(self):
-    if self.context_mode == "overlap":
-        return self._finalize_overlap()
-    return self._finalize_accumulate()
+def finalize(self) -> RefineUpdate:
+    tail_text = ""
+    if self._last_right_trim > 0:
+        tail_left = self._last_chunk_dur - self._last_right_trim
+        if self._last_result_tokens and self._last_result_timestamps:
+            tail_text = _extract_center_tokens(..., tail_left, 0.0)
+        elif self._last_result_text:
+            tail_text = _extract_center_by_ratio(..., tail_left, 0.0)
+        if tail_text:
+            tail_text = _dedup_overlap(self._prev_committed_text, tail_text)
+    return RefineUpdate(..., is_final=True)
 ```
 
 `is_final=True`는 **텍스트가 비어있어도** 반드시 반환된다. 파이프라인이 REFINE 완료를 인식하기 위함.
@@ -343,19 +350,19 @@ def finalize(self):
 | `self.refine_buffer_samples` | 누적된 총 샘플 수 |
 | `self.refine_chunk_samples` | `int(chunk_sec × sample_rate)`. 이 값에 도달하면 flush (단일 threshold) |
 
-flush threshold는 항상 동일하다 (두 단계 전환 없음). `chunk_sec=30`이면 항상 480,000 샘플(30초)마다 flush.
+flush threshold는 항상 동일하다 (두 단계 전환 없음). `chunk_sec=3`이면 항상 48,000 샘플(3초)마다 flush.
 
 ### 플러시 타이밍 예시
 
 ```text
-frame_sec = 0.1초, sample_rate = 16000, chunk_sec = 30 (기본값)
+frame_sec = 0.01초, sample_rate = 16000, chunk_sec = 3 (기본값)
 
-flush threshold: 30초 × 16000 = 480,000 샘플 (항상 고정)
+flush threshold: 3초 × 16000 = 48,000 샘플 (항상 고정)
 
 프레임 반복:
-  frame 1~299 (0~29.9초): 각 1600샘플 누적
-  frame 300 (29.9~30.0초): total 480,000 → FLUSH! (첫 번째)
-  frame 301~600: 다시 480,000 누적 → FLUSH! (두 번째)
+  frame 1~299 (0~2.99초): 각 160샘플 누적
+  frame 300 (2.99~3.0초): total 48,000 → FLUSH! (첫 번째)
+  frame 301~600: 다시 48,000 누적 → FLUSH! (두 번째)
   ...
 ```
 
@@ -660,4 +667,4 @@ pipeline.run()
 | `utils/subtitle_store.py` | confirmed_text 축적 + SequenceMatcher 오버레이 |
 | `utils/audio_source.py` | 오디오 프레임 소스 (WAV 파일 + 마이크/VAD) |
 | `utils/time_utils.py` | 타임스탬프 포맷 |
-| `eval/eval_all.py` | 배치 평가 스크립트 |
+| `eval.py` | 배치 평가 스크립트 |
