@@ -1,0 +1,10 @@
+numpy
+librosa
+soundfile
+sherpa-onnx
+pyyaml
+quickspacer
+uvicorn
+fastapi
+websockets
+python-multipart

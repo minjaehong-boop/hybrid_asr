@@ -1,0 +1,24 @@
+# hybrid1 pipeline configuration
+
+transducer:
+  model_dir: models/streaming_model
+  sample_rate: 16000
+  feature_dim: 80
+  num_threads: 2
+  provider: cpu          # cpu | cuda
+  use_int8: true         # false for fp32 models
+
+refine:
+  model_dir: models/refine_model
+  language: ko          # auto | zh | en | ja | ko | yue
+  sample_rate: 16000
+  num_threads: 2
+  provider: cpu          # cpu | cuda | auto
+  use_itn: false
+  chunk_sec: 3
+  trim_sec: 0.5        # center-commit overlap per side; 0 disables CC
+
+pipeline:
+  frame_sec: 0.01         # live stage frame size
+  realtime: true          # simulate real-time playback
+  max_seconds: null       # null = no limit; set for quick debugging
