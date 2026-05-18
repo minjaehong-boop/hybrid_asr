@@ -29,6 +29,7 @@
 git clone -b streaming_model https://github.com/minjaehong-boop/hybrid_asr.git
 cd hybrid_asr
 ```
+download폴더를 만들어, zeroth_korean, ksponspeech, musan(필요 시) 데이터셋을 위치시킵니다.
 
 ## 2. 가상환경 및 패키지 설치
 
