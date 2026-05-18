@@ -1,0 +1,6 @@
+data/
+download/
+**/exp/
+__pycache__/
+*.pyc
+*.pt
