@@ -33,14 +33,11 @@
     └── README_SERVER.md
 ```
 
-## 2. 환경 설치
+## 2. 환경 활성화
 
 ```bash
-cd /deepet/jh/sensevoice/finetune/scratch
-python3.11 -m venv .venv
+cd /deepet/jh/sensevoice/
 source .venv/bin/activate
-pip install -U pip
-pip install -r requirements.txt
 ```
 
 ## 3. CMVN 재계산 (최초 1회)
