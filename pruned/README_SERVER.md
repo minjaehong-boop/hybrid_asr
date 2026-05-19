@@ -1,13 +1,13 @@
 # SenseVoiceSmall 프루닝 파인튜닝
 
 서버 경로:
-- 프로젝트: `/deepet/jh/sensevoice/workdir/pruned/`
-- jsonl:    `/deepet/jh/sensevoice/workdir/jsonl/` (sibling)
+- 프로젝트: `/deepet/jh/sensevoice/finetune/pruned/`
+- jsonl:    `/deepet/jh/sensevoice/finetune/jsonl/` (sibling)
 
 ## 1. 폴더 구조
 
 ```
-/deepet/jh/sensevoice/workdir/
+/deepet/jh/sensevoice/finetune/
 ├── jsonl/                               # 이미 서버에 존재
 │   ├── train.jsonl  dev.jsonl
 │   ├── train_kspon.jsonl  dev_kspon.jsonl
@@ -31,7 +31,7 @@
 ## 2. 환경 설치
 
 ```bash
-cd /deepet/jh/sensevoice/workdir/pruned
+cd /deepet/jh/sensevoice/finetune/pruned
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
@@ -70,4 +70,4 @@ python scripts/export_pruned_onnx.py --tag tiny \
 
 - **text_language**: jsonl 항목에 `text_language` 필드가 없으면 데이터셋은 기본값 `<|zh|>`를 사용. 한국어 학습 시 `text_language: "<|ko|>"` 추가 확인 필요.
 - **init_param**: `workdir/sensevoice_pruned_tiny/model.pt.pruned` 가 반드시 존재해야 함.
-- **asset 경로**: [conf/sensevoice_pruned_tiny.yaml](conf/sensevoice_pruned_tiny.yaml) 의 `bpemodel` / `cmvn_file` 이 `/deepet/jh/sensevoice/workdir/pruned/assets/...` 로 하드코딩됨. 설치 위치가 다르면 수정 필요.
+- **asset 경로**: [conf/sensevoice_pruned_tiny.yaml](conf/sensevoice_pruned_tiny.yaml) 의 `bpemodel` / `cmvn_file` 이 `/deepet/jh/sensevoice/finetune/pruned/assets/...` 로 하드코딩됨. 설치 위치가 다르면 수정 필요.
