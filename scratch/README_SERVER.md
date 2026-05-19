@@ -3,13 +3,13 @@
 원본 SenseVoiceSmall 공식 아키텍처에서 task embedding / rich CE / task query concat을 제거하고, 한국어 전용 5000 BPE vocab으로 **scratch 재학습** (pretrained weight 로드 없음).
 
 서버 경로:
-- 프로젝트: `/deepet/jh/sensevoice/workdir/scratch/`
-- jsonl:    `/deepet/jh/sensevoice/workdir/jsonl/` (sibling)
+- 프로젝트: `/deepet/jh/sensevoice/finetune/scratch/`
+- jsonl:    `/deepet/jh/sensevoice/finetune/jsonl/` (sibling)
 
 ## 1. 폴더 구조
 
 ```
-/deepet/jh/sensevoice/workdir/
+/deepet/jh/sensevoice/finetune/
 ├── jsonl/                               # 이미 서버에 존재
 │   ├── train.jsonl  dev.jsonl
 │   ├── train_kspon.jsonl  dev_kspon.jsonl
@@ -36,7 +36,7 @@
 ## 2. 환경 설치
 
 ```bash
-cd /deepet/jh/sensevoice/workdir/scratch
+cd /deepet/jh/sensevoice/finetune/scratch
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
@@ -49,7 +49,7 @@ SenseVoice 기본 `am.mvn`은 중국어/일본어/영어 섞인 통계. 한국�
 
 ```bash
 python scripts/compute_kspon_cmvn.py \
-    --jsonl /deepet/jh/sensevoice/workdir/jsonl/train.jsonl \
+    --jsonl /deepet/jh/sensevoice/finetune/jsonl/train.jsonl \
     --out   assets/kspon.mvn \
     --n 20000
 ```
@@ -80,7 +80,7 @@ CUDA_VISIBLE_DEVICES=0,1 torchrun --nproc_per_node=2 train_sensevoice_scratch.py
 - **text_language 불필요**: `SenseVoiceCTCDatasetNoTask`는 task prefix를 넣지 않으므로 jsonl의 `text_language` 필드는 무시됨. 기존 `add_text_language.py`를 돌릴 필요 없음.
 - **init_param 없음**: scratch이므로 pretrained 로드 없음. random init부터 학습.
 - **vocab=5000**: icefall BPE. `<blk>=0, <sos/eos>=1, <unk>=2`. SenseVoice 기본 `blank_id=0`과 일치.
-- **CMVN 경로**: [conf/sensevoice_scratch_ko5k.yaml](conf/sensevoice_scratch_ko5k.yaml)의 `cmvn_file`과 `bpemodel`이 `/deepet/jh/sensevoice/workdir/scratch/assets/...`로 하드코딩. 설치 위치가 다르면 수정.
+- **CMVN 경로**: [conf/sensevoice_scratch_ko5k.yaml](conf/sensevoice_scratch_ko5k.yaml)의 `cmvn_file`과 `bpemodel`이 `/deepet/jh/sensevoice/finetune/scratch/assets/...`로 하드코딩. 설치 위치가 다르면 수정.
 - **아키텍처**: `num_blocks=24, tp_blocks=0` (원본 70 → 24로 축소). 조정하려면 YAML 편집 후 재시작.
 
 ## 6. 기존 pruned 방식과의 차이
